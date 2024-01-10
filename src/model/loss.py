@@ -100,7 +100,7 @@ def get_rgb_loss(conf, coarse=True, using_bg=False, reduction="mean"):
     print("using vanilla rgb loss")
     return (
         torch.nn.L1Loss(reduction=reduction)
-        if conf.get_bool("use_l1")
+        if conf.get_bool("use_l1")          #False
         else torch.nn.MSELoss(reduction=reduction)
     )
 

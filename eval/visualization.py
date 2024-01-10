@@ -6,29 +6,17 @@ sys.path.insert(
 )
 
 import torch
-import numpy as np
+
 import util
 from render import NeRFRenderer
 from model import make_model
 
 sys.path.append("dataloader")
-import math
-from skimage.metrics import structural_similarity as compare_ssim
-from skimage.metrics import peak_signal_noise_ratio as compare_psnr
-from lpips import LPIPS
-import torch.nn.functional as F
-from math import exp
-from dataset.dataloader import Dataset
 
-sys.path.append("dataloader")
-import math
-# from skimage.metrics import structural_similarity as compare_ssim
-# from skimage.metrics import peak_signal_noise_ratio as compare_psnr
-# from lpips import LPIPS
-import torch.nn.functional as F
-from math import exp
+
 from dataset.dataloader import Dataset
-import imageio
+import cv2
+
 
 def extra_args(parser):
     parser.add_argument(
@@ -44,7 +32,7 @@ def extra_args(parser):
         default=[0, 1, 2, 3],
         help="Source view(s) in image, in increasing order. -1 to use random 1 view.",
     )
-    parser.add_argument("--batch_size", type=int, default=16, help="Batch size") #4
+    parser.add_argument("--batch_size", type=int, default=1, help="Batch size") #4
     parser.add_argument(
         "--seed",
         type=int,
@@ -130,11 +118,12 @@ print(args.datadir)
 
 
 data_loader = torch.utils.data.DataLoader(
-    dset, batch_size=16, shuffle=False, pin_memory=False #1
+    dset, batch_size=1, shuffle=True, pin_memory=False #1
 )
 
 renderer = NeRFRenderer.from_conf(
     conf["renderer"],
+    white_bkgd=True,
     eval_batch_size=args.ray_batch_size,
     enable_refr=args.enable_refr,
     enable_refl=args.enable_refl,
@@ -169,7 +158,6 @@ if os.path.exists(renderer_state_path):
 if args.stage == 2 or args.stage == 3:
     if not args.use_sdf:
         renderer.init_tet(
-            # mesh_path="dataloader/learned_geo/" + args.name.split("_")[0] + ".obj"
             mesh_path="data/learned_geo/" + args.name.split("_")[0] + ".obj"
         )
 elif args.stage != 1:
@@ -181,7 +169,7 @@ source = torch.tensor(args.source, dtype=torch.long)
 NS = len(source)
 random_source = NS == 1 and source[0] == -1
 
-cnt = 0
+
 
 with torch.no_grad():
     for data in data_loader:
@@ -191,26 +179,21 @@ with torch.no_grad():
         mask = data["mask"][0].to(device=device).cpu().float()  # todo
         _, H, W = image.shape  # (3, H, W)
         cam_rays = util.gen_rays(pose, W, H, focal, z_near, z_far)  # (H, W, 8)
-        rgbs_gt = image * 0.5 + 0.5  # (3, H, W)
 
         rgbs, depth = render_par(
             cam_rays.view(-1, cam_rays.shape[-1]).unsqueeze(0), want_weights=True
-        )
+        )  #rendering operation
         rgbs = rgbs.permute(0, 2, 1).view(-1, 3, H, W).contiguous().cpu()
-        rgbs_gt = rgbs_gt.unsqueeze(0).cpu()
 
-        apply_mask = True
-        if apply_mask:
-            import cv2
+        rgb_file_name = f"rgbscow_{1}.png"
+        # cv2.imwrite(
+        #     rgb_file_name,
+        #     rgbs.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255,
+        # )
+        fixed_rgbs = rgbs.squeeze(0).permute(1, 2, 0).cpu().numpy()
+        fixed_rgbs[:, :, [0, 2]] = fixed_rgbs[:, :, [2, 0]]  # Swap B and R channels
+        cv2.imwrite(rgb_file_name, fixed_rgbs * 255)
 
-            cv2.imwrite("mask.png", mask.squeeze(0).unsqueeze(-1).cpu().numpy() * 255)
-
-            rgb_file_name = f"rgbs_{cnt}.png"
-            cv2.imwrite(
-                rgb_file_name,
-                rgbs.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255,
-            )
-
-        cnt += 1
+        break
 
 

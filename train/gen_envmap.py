@@ -27,7 +27,7 @@ def extra_args(parser):
         default=[0, 1, 2, 3],
         help="Source view(s) in image, in increasing order. -1 to use random 1 view.",
     )
-    parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument(
         "--seed",
         type=int,

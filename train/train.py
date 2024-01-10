@@ -20,7 +20,7 @@ from dataset.dataloader import Dataset
 
 def extra_args(parser):
     parser.add_argument(
-        "--batch_size", "-B", type=int, default=4, help="Object batch size ('SB')"
+        "--batch_size", "-B", type=int, default=16, help="Object batch size ('SB')"
     )
     parser.add_argument(
         "--freeze_enc",
@@ -87,12 +87,12 @@ def extra_args(parser):
     parser.add_argument(
         "--sphere_radius", type=float, default=1.0, help="Radius of the bounding sphere"
     )
-    parser.add_argument("--ior", type=float, default=1.5, help="index of refraction")
+    parser.add_argument("--ior", type=float, default=1.2, help="index of refraction")
     return parser
 
 
 # parse args
-args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=128)
+args, conf = util.args.parse_args(extra_args, training=True, default_ray_batch_size=256)
 device = util.get_cuda(args.gpu_id[0])
 
 if args.stage != 1 and args.stage != 2:
@@ -105,6 +105,8 @@ test_dset = Dataset(args.datadir, stage="test")
 # network
 net = make_model(conf["model"]).to(device=device)
 
+
+trained_ior = torch.nn.Parameter(torch.tensor(1.1000))
 # renderer
 renderer = NeRFRenderer.from_conf(
     conf["renderer"],
@@ -113,7 +115,8 @@ renderer = NeRFRenderer.from_conf(
     stage=args.stage,
     tet_scale=args.tet_scale,
     sphere_radius=args.sphere_radius,
-    ior=args.ior,
+    # ior=args.ior,
+    ior = trained_ior,
     use_cone=args.use_cone,
     use_grid=args.use_grid,
     use_sdf=args.use_sdf,
@@ -164,10 +167,20 @@ class RRFTrainer(trainlib.Trainer):
                         "params": [p for n, p in net.named_parameters()],
                         "lr": 0.01,  # 0.01 for ngp, 5e-4 for nerf
                     },
+                    {
+                        "params": [trained_ior],
+                        "lr": 0.005,
+                    }
                 ]
             )
         else:
             raise NotImplementedError()
+
+        if args.gamma != 1.0:
+            self.lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer=self.optim, gamma=args.gamma)
+            # self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optim, T_max=100, eta_min=0)
+        else:
+            self.lr_scheduler = None
 
         # load renderer paramters
         if os.path.exists(self.renderer_state_path):
@@ -215,15 +228,30 @@ class RRFTrainer(trainlib.Trainer):
         rgbs_gt = image * 0.5 + 0.5  # (3, H, W)
         rgbs_gt = rgbs_gt.permute(1, 2, 0).contiguous().reshape(-1, 3)  # (H * W, 3)
 
-        apply_mask = False
-        if apply_mask:
-            mask_flatten = mask[:, :H, :].reshape(-1)
-            hit_idx = torch.where(mask_flatten > 0.5)[0]
-            perm = torch.randperm(hit_idx.numel())
-            selected_indices = perm[: args.ray_batch_size]
-            pix_inds = hit_idx[selected_indices]
-        else:
-            pix_inds = torch.randint(0, H * W, (args.ray_batch_size,))
+        apply_mask = False  #False
+        # if apply_mask:
+        #     mask_flatten = mask[:, :H, :].reshape(-1)
+        #     hit_idx = torch.where(mask_flatten > 0.5)[0]
+        #     perm = torch.randperm(hit_idx.numel())
+        #     selected_indices = perm[: args.ray_batch_size]
+        #     pix_inds = hit_idx[selected_indices]
+        # else:
+        #     pix_inds = torch.randint(0, H * W, (args.ray_batch_size,))
+
+        mask_flatten = mask[:, :H, :].reshape(-1)
+        hit_idx = torch.where(mask_flatten > 0.5)[0]
+        perm = torch.randperm(hit_idx.numel())
+        selected_indices = perm[: args.ray_batch_size // 2]
+        pix_inds_masked = hit_idx[selected_indices].to(device=device)
+        # pix_inds_unmasked = torch.randint(0, H * W, (args.ray_batch_size // 2,),device=device)
+        pix_inds_unmasked = torch.randint(2, H * W - 2, (args.ray_batch_size // 2,), device=device)
+        pix_inds = torch.cat((pix_inds_masked, pix_inds_unmasked))
+        # # 删除重复元素
+        # pix_inds_unique = torch.unique(pix_inds)
+        # if pix_inds_unique.size(0) < pix_inds.size(0):
+        #     pix_inds = pix_inds_unique
+        #     # print("警告：已删除重复的采样点。")
+
         samp_rgbs_gt = rgbs_gt[pix_inds].unsqueeze(0)  # (1, ray_batch_size, 3)
         samp_rays = (
             cam_rays.view(-1, cam_rays.shape[-1])[pix_inds]
@@ -252,7 +280,8 @@ class RRFTrainer(trainlib.Trainer):
             coarse = render_dict.coarse
             fine = render_dict.fine
             using_fine = len(fine) > 0
-            rgb_loss = self.rgb_coarse_crit(coarse.rgb, samp_rgbs_gt)
+            using_fine = True
+            rgb_loss = self.rgb_coarse_crit(coarse.rgb, samp_rgbs_gt) #this step itself has problem.
             loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
             if using_fine:
                 if apply_mask:

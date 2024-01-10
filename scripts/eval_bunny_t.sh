@@ -8,7 +8,7 @@ python eval/eval_approx.py  \
 --tet_scale 3.8 \
 --sphere_radius 2.43 \
 --enable_refr \
---ior 1.1
+--ior 1.89
 # --use_cone
 # --use_sdf
 # --use_progressive_encoder

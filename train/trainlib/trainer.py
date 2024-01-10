@@ -16,7 +16,7 @@ class Trainer:
         self.train_data_loader = torch.utils.data.DataLoader(
             train_dataset,
             # batch_size=args.batch_size,
-            batch_size=1,
+            batch_size=64, #1
             shuffle=True,
             # num_workers=1,    # lead to very slow training
             pin_memory=False,
@@ -24,7 +24,7 @@ class Trainer:
         self.test_data_loader = torch.utils.data.DataLoader(
             test_dataset,
             # batch_size=min(args.batch_size, 16),
-            batch_size=1,
+            batch_size=64,   #1
             shuffle=True,
             # num_workers=1,    # lead to very slow training
             pin_memory=False,
@@ -38,7 +38,7 @@ class Trainer:
         self.eval_interval = conf.get_int("eval_interval")
         self.test_interval = self.eval_interval
         self.num_epoch_repeats = conf.get_int("num_epoch_repeats", 1)
-        self.num_epochs = 8
+        self.num_epochs = 150
         self.accu_grad = conf.get_int("accu_grad", 1)
         self.summary_path = os.path.join(args.logs_path, args.name)
         self.writer = SummaryWriter(self.summary_path)
@@ -47,12 +47,12 @@ class Trainer:
 
         os.makedirs(self.summary_path, exist_ok=True)
 
-        if args.gamma != 1.0:
-            self.lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-                optimizer=self.optim, gamma=args.gamma
-            )
-        else:
-            self.lr_scheduler = None
+        # if args.gamma != 1.0:
+        #     self.lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        #         optimizer=self.optim, gamma=args.gamma
+        #     )
+        # else:
+        #     self.lr_scheduler = None
 
         # Load weights
         self.managed_weight_saving = hasattr(net, "load_weights")
@@ -149,13 +149,22 @@ class Trainer:
         progress = tqdm.tqdm(bar_format="[{rate_fmt}] ")
         for epoch in range(self.num_epochs):
             self.writer.add_scalar(
-                "lr", self.optim.param_groups[0]["lr"], global_step=step_id
+                "lr_0", self.optim.param_groups[0]["lr"], global_step=step_id
             )
+            # self.writer.add_scalar(
+            #     "lr_1", self.optim.param_groups[1]["lr"], global_step=step_id
+            # )
             batch = 0
             for _ in range(self.num_epoch_repeats):
                 for data in self.train_data_loader:
-                    losses = self.train_step(data, global_step=step_id)
+                    losses = self.train_step(data, global_step=step_id)  #train.py line 284
                     loss_str = fmt_loss_str(losses)
+                    # self.writer.add_scalars(
+                    # "losses_step", losses, global_step=step_id
+                    # )
+                    # self.writer.add_scalar(
+                    # "ior_step", self.optim.param_groups[0]["params"][0].item(), global_step=step_id
+                    # )
                     if batch % self.print_interval == 0:
                         print(
                             "E",
@@ -166,6 +175,7 @@ class Trainer:
                             " lr",
                             self.optim.param_groups[0]["lr"],
                         )
+                        # print(self.optim.param_groups[1])
 
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
                         print("saving")
@@ -223,8 +233,20 @@ class Trainer:
                         batch == self.num_total_batches - 1
                         or batch % self.accu_grad == self.accu_grad - 1
                     ):
+                        # torch.nn.utils.clip_grad_norm_(parameters=self.optim.param_groups[0]["params"][0], max_norm=0.025, norm_type=2) #0.025
+                        # torch.nn.utils.clip_grad_norm_(parameters=self.optim.param_groups[1]["params"][0], max_norm=1.5, norm_type=2)
+
+                        # 获取参数的梯度
+                        grad0 = self.optim.param_groups[0]["params"][0].grad
+                        # grad1 = self.optim.param_groups[1]["params"][0].grad
+                        # grad0_norm = torch.norm(grad0, p=2)
+                        # grad1_norm = torch.norm(grad1, p=2)
+                        # self.writer.add_scalar("grad0_step", grad0.item(), global_step=step_id)
+                        # self.writer.add_scalar("grad1_step", grad1_norm.item(), global_step=step_id)
+
                         self.optim.step()
                         self.optim.zero_grad()
+                        # self.optim.param_groups[1]["params"][0].data=self.optim.param_groups[1]["params"][0].data.clamp(1.05, 99)
 
                     self.post_batch(epoch, batch)
                     step_id += 1
@@ -232,3 +254,9 @@ class Trainer:
                     progress.update(1)
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
+            # self.writer.add_scalars(
+            # "losses_epoch", losses, global_step=epoch
+            # )
+            # self.writer.add_scalar(
+            # "ior_epoch", self.optim.param_groups[0]["params"][0].item(), global_step=epoch
+            # )

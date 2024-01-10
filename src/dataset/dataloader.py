@@ -7,6 +7,7 @@ import os
 import sys
 from os.path import join
 from PIL import Image
+from segment_anything import SamPredictor, sam_model_registry
 
 sys.path.append("..")
 import dataset.utils as api_utils
@@ -58,7 +59,26 @@ def get_mvp(focal, pose, image_size, far=50, near=0.001):
     )
     return projection @ np.linalg.inv(pose)  # [4, 4]
 
-
+class segment_mask:
+    def __init__(self, img_path, sam_path):
+        self.img_path = img_path
+        self.sam_path = sam_path
+        sam = sam_model_registry["vit_h"](checkpoint=self.sam_path)
+        self.predictor = SamPredictor(sam)
+    
+    def get_mask(self):
+        image = cv2.imread(self.img_path)
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        self.predictor.set_image(image)
+        my_list = [[image.shape[1]/2,image.shape[0]/2],
+                [image.shape[1]/2+30,image.shape[0]/2],
+                [image.shape[1]/2-30,image.shape[0]/2],
+                [image.shape[1]/2,image.shape[0]/2+30],
+                [image.shape[1]/2,image.shape[0]/2-30]]
+        my_array = np.array(my_list)  # 将列表转换为 NumPy 数组
+        masks, _, _ = self.predictor.predict(my_array,[1,1,1,1,1])
+        return masks[0]
+    
 class Dataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -75,10 +95,11 @@ class Dataset(torch.utils.data.Dataset):
             self.image_dir = data_dir
             self.depth_dir = data_dir + "/../../depth/" + os.path.basename(data_dir)
             self.meta_dir = data_dir + "/../../meta"
+            self.mask_dir = data_dir + "/mask"
             if self.split == "train":
-                self.image_list = [str(2 * d) for d in range(50)]
+                self.image_list = [str(2 * d) for d in range(50)] #50
             else:
-                self.image_list = [str(2 * d + 1) for d in range(39)]
+                self.image_list = [str(2 * d + 1) for d in range(39)] #39
         elif self.type == "eikonal":
             self.image_size = (672, 504)
             self.z_near, self.z_far = 0.02, 3
@@ -132,12 +153,22 @@ class Dataset(torch.utils.data.Dataset):
         if self.type == "blender":
             img_name = name + "_0001.png"
             meta_name = name + "_meta_0000.json"
+
             depth_name = name + "_depth_0001.exr"
             depth_path = join(self.depth_dir, depth_name)
             depth = api_utils.exr_loader(depth_path, ndim=1)
             dd = cv2.resize(depth, dsize=(480, 272))
-            mask = dd < 100
-            mask = torch.tensor(mask).unsqueeze(0)
+            mask3 = dd < 100
+
+            # image_path = join(self.image_dir, img_name)
+            # seg_mask = segment_mask(image_path, "sam_cp/sam_vit_h_4b8939.pth")
+            # mask2 = seg_mask.get_mask().astype("float")
+            # mask3 = cv2.resize(mask2, dsize=(480, 272))
+            # mask_path = join(self.mask_dir,"mask_" + name + ".png",)
+            # # Save the mask image
+            # cv2.imwrite(mask_path, mask3*255)
+            
+            mask = torch.tensor(mask3).unsqueeze(0)
         elif self.type == "eikonal":
             img_name = name + ".JPG"
             meta_name = name + ".json"

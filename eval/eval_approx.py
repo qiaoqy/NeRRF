@@ -108,7 +108,7 @@ def extra_args(parser):
         default=[0, 1, 2, 3],
         help="Source view(s) in image, in increasing order. -1 to use random 1 view.",
     )
-    parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size") #4
     parser.add_argument(
         "--seed",
         type=int,
@@ -192,7 +192,7 @@ dset = Dataset(args.datadir, stage="test")
 print(args.datadir)
 
 data_loader = torch.utils.data.DataLoader(
-    dset, batch_size=1, shuffle=False, pin_memory=False
+    dset, batch_size=16, shuffle=False, pin_memory=False #1
 )
 
 renderer = NeRFRenderer.from_conf(
@@ -241,7 +241,8 @@ if os.path.exists(renderer_state_path):
 if args.stage == 2 or args.stage == 3:
     if not args.use_sdf:
         renderer.init_tet(
-            mesh_path="dataloader/learned_geo/" + args.name.split("_")[0] + ".obj"
+            # mesh_path="dataloader/learned_geo/" + args.name.split("_")[0] + ".obj"
+            mesh_path="data/learned_geo/" + args.name.split("_")[0] + ".obj"
         )
 elif args.stage != 1:
     raise NotImplementedError()
@@ -278,12 +279,19 @@ with torch.no_grad():
             import cv2
 
             cv2.imwrite("mask.png", mask.squeeze(0).unsqueeze(-1).cpu().numpy() * 255)
+
+            rgb_file_name1 = f"rgbs_bunny_{cnt}.png"
+            cv2.imwrite(
+                rgb_file_name1,
+                rgbs.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255,
+            )
             cv2.imwrite(
                 "rgbs.png",
                 (rgbs.squeeze(0) * mask).permute(1, 2, 0).cpu().numpy() * 255,
             )
+            rgb_file_name2 = f"rgbs_gt_{cnt}.png"
             cv2.imwrite(
-                "rgbs_gt.png",
+                rgb_file_name2,
                 (rgbs_gt.squeeze(0) * mask).permute(1, 2, 0).cpu().numpy() * 255,
             )
 
@@ -299,10 +307,26 @@ with torch.no_grad():
             )
             lpips = 0
         else:
+            import cv2
+
+            # cv2.imwrite("mask.png", mask.squeeze(0).unsqueeze(-1).cpu().numpy() * 255)
+
+            rgb_file_name1 = f"rgbs_bunny_{cnt}.png"
+            cv2.imwrite(
+                rgb_file_name1,
+                cv2.cvtColor(rgbs.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255, cv2.COLOR_RGB2BGR),
+            )
+            rgb_file_name2 = f"rgbs_gt_{cnt}.png"
+            cv2.imwrite(
+                rgb_file_name2,
+                cv2.cvtColor(rgbs_gt.squeeze(0).permute(1, 2, 0).cpu().numpy() * 255, cv2.COLOR_RGB2BGR),
+            )
+
             lpips = compare_lpips(rgbs, rgbs_gt).sum().item()
             ssim = compare_ssim(
                 rgbs.numpy().squeeze(0),
                 rgbs_gt.numpy().squeeze(0),
+                win_size = 3,
                 multichannel=True,
                 data_range=1,
                 channel_axis=0,
@@ -317,7 +341,7 @@ with torch.no_grad():
 
         # import imageio
 
-        # vis_u8 = (rgbs * 255).astype(np.uint8)
+        # vis_u8 = (rgbs * 255).numpy().astype(np.uint8)
         # imageio.imwrite("test_eval.png", vis_u8)
 
         cnt += 1

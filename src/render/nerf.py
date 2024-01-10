@@ -86,7 +86,7 @@ class NeRFRenderer(torch.nn.Module):
         noise_std=0.0,
         depth_std=0.4,
         eval_batch_size=100000,
-        white_bkgd=False,
+        white_bkgd=False, #False
         sched=None,
         enable_refr=False,
         enable_refl=False,
@@ -1523,7 +1523,7 @@ class NeRFRenderer(torch.nn.Module):
     def from_conf(
         cls,
         conf,
-        white_bkgd=False,
+        white_bkgd=True, #False
         eval_batch_size=100000,
         enable_refr=False,
         enable_refl=False,
