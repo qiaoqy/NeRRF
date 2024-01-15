@@ -9,6 +9,7 @@ python train/train.py \
 --stage 2 \
 --tet_scale 4.2 \
 --sphere_radius 2.30 \
+--ior 1.2 \
 --enable_refr
 # --resume \
 # --ior 1.2 \

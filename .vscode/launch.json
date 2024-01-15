@@ -1,0 +1,50 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Train-Stage1",
+            "type": "python",
+            "request": "launch",
+            "program": "train/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false, 
+            "args": [
+                "-B", "16",
+                "-n", "cow_transparent",
+                "-c", "NeRRF.conf",
+                "-D", "data/blender/transparent/cow",
+                "--gamma", "0.95",
+                "--gpu_id=0", 
+                "--visual_path", "tet_visual",
+                "--stage", "1",
+                "--tet_scale", "4.2",
+                "--sphere_radius", "2.30",
+                "--enable_refr"
+            ]
+        },
+        {
+            "name": "Train-Stage2",
+            "type": "python",
+            "request": "launch",
+            "program": "train/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false, 
+            "args": [
+                "-B", "16",
+                "-n", "cow_transparent",
+                "-c", "NeRRF.conf",
+                "-D", "data/blender/transparent/cow",
+                "--gamma", "0.95",
+                "--gpu_id=0", 
+                "--visual_path", "tet_visual",
+                "--stage", "2",
+                "--tet_scale", "4.2",
+                "--sphere_radius", "2.30",
+                "--enable_refr"
+            ]
+        }
+    ]
+}

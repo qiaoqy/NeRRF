@@ -159,9 +159,9 @@ class Trainer:
                 for data in self.train_data_loader:
                     losses = self.train_step(data, global_step=step_id)  #train.py line 284
                     loss_str = fmt_loss_str(losses)
-                    # self.writer.add_scalars(
-                    # "losses_step", losses, global_step=step_id
-                    # )
+                    self.writer.add_scalars(
+                    "losses_step", losses, global_step=step_id
+                    )
                     # self.writer.add_scalar(
                     # "ior_step", self.optim.param_groups[0]["params"][0].item(), global_step=step_id
                     # )
@@ -254,9 +254,9 @@ class Trainer:
                     progress.update(1)
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
-            # self.writer.add_scalars(
-            # "losses_epoch", losses, global_step=epoch
-            # )
+            self.writer.add_scalars(
+            "losses_epoch", losses, global_step=epoch
+            )
             # self.writer.add_scalar(
             # "ior_epoch", self.optim.param_groups[0]["params"][0].item(), global_step=epoch
             # )

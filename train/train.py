@@ -115,8 +115,8 @@ renderer = NeRFRenderer.from_conf(
     stage=args.stage,
     tet_scale=args.tet_scale,
     sphere_radius=args.sphere_radius,
-    # ior=args.ior,
-    ior = trained_ior,
+    ior=args.ior,
+    # ior = trained_ior,
     use_cone=args.use_cone,
     use_grid=args.use_grid,
     use_sdf=args.use_sdf,
@@ -167,10 +167,10 @@ class RRFTrainer(trainlib.Trainer):
                         "params": [p for n, p in net.named_parameters()],
                         "lr": 0.01,  # 0.01 for ngp, 5e-4 for nerf
                     },
-                    {
-                        "params": [trained_ior],
-                        "lr": 0.005,
-                    }
+                    # {
+                    #     "params": [trained_ior],
+                    #     "lr": 0.005,
+                    # }
                 ]
             )
         else:
