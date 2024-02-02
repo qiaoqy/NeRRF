@@ -155,9 +155,9 @@ class NeRFRenderer(torch.nn.Module):
         self.indices = torch.tensor(tets["indices"], dtype=torch.long, device="cuda")
         self.dmtet = DMTet("cuda")
 
-        if self.use_grid:
+        if self.use_grid: # default false
             # use grid to represent sdf and deformation, not suggested
-            if stage == 1:
+            if stage == 1: # load the object file into torch.nn
                 mesh = trimesh.load("data/init/sphere.obj", force="mesh")
                 scale = 1.5 / np.array(mesh.bounds[1] - mesh.bounds[0]).max()
                 center = np.array(mesh.bounds[1] + mesh.bounds[0]) / 2
@@ -187,7 +187,7 @@ class NeRFRenderer(torch.nn.Module):
             self.sdf_and_deform_mlp = MLP(self.in_dim, 4, 32, 3, False)  # 4, 32, 3
             self.encoder.to("cuda")
             self.sdf_and_deform_mlp.to("cuda")
-            if stage == 1:
+            if stage == 1: #do not has elif stage2 here
                 # init sdf with base mesh
                 print(f"[INFO] init sdf from base mesh")
                 mesh = trimesh.load("data/init/sphere.obj", force="mesh")
@@ -249,7 +249,7 @@ class NeRFRenderer(torch.nn.Module):
             mlp_map_opt = mlptexture.MLPTexture3D(
                 geometry.getAABB(), channels=9, min_max=[mlp_min, mlp_max]
             )
-            mat = material.Material({"kd_ks_normal": mlp_map_opt})
+            mat = material.Material({"kd_ks_normal": mlp_map_opt}) #kd_ks_normal 是一个包含漫反射系数 kd、镜面反射系数 ks 和表面法线 normal 分布信息的材质属性
             mat["bsdf"] = "pbr"
             return mat
 
@@ -257,7 +257,7 @@ class NeRFRenderer(torch.nn.Module):
         self.material = initial_guess_material(self)
         self.lgt = light.create_trainable_env_rnd(512, scale=0.0, bias=1.0)
         self.lgt.build_mips()
-        self.material.requires_grad = False
+        self.material.requires_grad = True
         self.lgt.base.requires_grad = False
 
     @torch.no_grad()
@@ -286,6 +286,22 @@ class NeRFRenderer(torch.nn.Module):
         sdf = self.sdf
         deform = torch.tanh(self.deform) / self.tet_grid_size
         verts, faces, _, _ = self.dmtet(self.verts + deform, sdf, self.indices)
+
+        # get normals
+        i0, i1, i2 = faces[:, 0], faces[:, 1], faces[:, 2]
+        v0, v1, v2 = verts[i0, :], verts[i1, :], verts[i2, :]
+        face_normals = torch.cross(v1 - v0, v2 - v0)
+        self.face_normals = face_normals / torch.sqrt(
+            torch.clamp(
+                torch.sum(face_normals * face_normals, -1, keepdim=True), min=1e-20
+            )
+        )
+
+        verts = verts.detach().cpu().numpy()
+        faces = faces.detach().cpu().numpy()
+        self.mesh = trimesh.Trimesh(verts, faces, process=False)
+
+    def init_tet_iteration(self, verts, faces):
 
         # get normals
         i0, i1, i2 = faces[:, 0], faces[:, 1], faces[:, 2]
@@ -424,7 +440,7 @@ class NeRFRenderer(torch.nn.Module):
     def render_mask(self, rays, mvp, h, w, global_step=0):
         # rays:[B, N, 8]
         mvp = mvp.unsqueeze(0)  # [B, 4, 4]
-        campos = rays[..., 0, 0:3]  # only need one ray per batch
+        campos = rays[..., 0, 0:3] # the starting point of ray
 
         # get mesh
         if self.use_grid:
@@ -436,8 +452,8 @@ class NeRFRenderer(torch.nn.Module):
                 if self.use_progressive_encoder
                 else self.encoder(self.verts)
             )
-            sdf, deform = pred[:, 0], pred[:, 1:]
-            deform = torch.tanh(deform) / self.tet_grid_size
+            sdf, deform = pred[:, 0], pred[:, 1:] # The output of DMTet MLP network
+            deform = torch.tanh(deform) / self.tet_grid_size # Regularization of the deform value
         verts, faces, uvs, uv_idx = self.dmtet(self.verts + deform, sdf, self.indices)
 
         if not self.use_grid:
@@ -470,21 +486,21 @@ class NeRFRenderer(torch.nn.Module):
         # run mesh operations to generate tangent space
         imesh = mesh.Mesh(
             verts, faces, v_tex=uvs, t_tex_idx=uv_idx, material=self.material
-        )
+        ) # v for vertex and t for triangle
         imesh = mesh.auto_normals(imesh)
-        imesh = mesh.compute_tangents(imesh)
+        imesh = mesh.compute_tangents(imesh) # also use nom to compute tangent
 
         h = 272
         buffers = render.render_mesh(
-            self.glctx,
-            imesh,
-            mvp,
-            campos,
-            self.lgt,
+            self.glctx, # nvdiffrast RasterizeCudaContext object
+            imesh, # include the position/ norm/ texture/ tangent
+            mvp, # Model-View-Projection -> pose transformation
+            campos, # camera position
+            self.lgt, # lighting object
             [h, w],
             1,
-            msaa=True,
-            bsdf="normal",
+            msaa=True, # Multisample Anti-Aliasing
+            bsdf="diffuse", #normal
         )
 
         def shade_normal():
@@ -492,10 +508,20 @@ class NeRFRenderer(torch.nn.Module):
             rgb = (mask[..., :3].detach().cpu().numpy() * 255).astype(np.uint8)
             image = Image.fromarray(rgb, mode="RGB")
             image.save("test_normal.png")
-
+        # "shaded" is the rbg alpha color of the image
         shade_normal()
+        tenso = buffers['shaded']
+        # 将张量转换为 NumPy 数组，并将值缩放到 0-255 范围内
+        numpy_array = (tenso[0, :, :, :3] * 255).detach().cpu().numpy().astype(np.uint8)
+
+        # 创建 PIL 图像对象
+        image = Image.fromarray(numpy_array)
+
+        # 保存图像
+        image.save("output.png")
+        rgb_img = buffers["shaded"][0, 1:271, ..., :3]
         mask = buffers["shaded"][..., 3:]
-        return (mask[..., 0], ek_loss)
+        return (rgb_img, mask[..., 0], ek_loss)
 
     def intersection_with_mesh(self, rays, mesh, far=False):
         vertices = mesh.vertices
@@ -1665,6 +1691,30 @@ class NeRFRenderer(torch.nn.Module):
         )  # important, process=True leads to seg fault...
 
         return mesh
+
+    def export_vf(
+        self,
+        decimate_target=-1,
+        global_step=0,
+    ):
+        if self.use_grid:
+            sdf = self.sdf
+            deform = torch.tanh(self.deform) / self.tet_grid_size
+        else:
+            pred = self.sdf_and_deform_mlp(
+                self.encoder(self.verts, step_id=global_step)
+                if self.use_progressive_encoder
+                else self.encoder(self.verts)
+            )
+            sdf, deform = pred[:, 0], pred[:, 1:]
+            deform = torch.tanh(deform) / self.tet_grid_size
+        vertices, triangles, uvs, uv_idx = self.dmtet(
+            self.verts + deform, sdf, self.indices
+        )
+        return [vertices, triangles]
+        # vertices_c = vertices.clone()
+        # triangles_c = triangles.clone()
+        # return [vertices_c, triangles_c]
 
     @classmethod
     def from_conf(

@@ -13,15 +13,15 @@
             "justMyCode": false, 
             "args": [
                 "-B", "16",
-                "-n", "cow_transparent",
+                "-n", "horse_transparent",
                 "-c", "NeRRF.conf",
-                "-D", "data/blender/transparent/cow",
+                "-D", "data/blender/transparent/horse",
                 "--gamma", "0.95",
                 "--gpu_id=0", 
                 "--visual_path", "tet_visual",
                 "--stage", "1",
-                "--tet_scale", "4.2",
-                "--sphere_radius", "2.30",
+                "--tet_scale", "3.8",
+                "--sphere_radius", "2.40",
                 "--enable_refr"
             ]
         },

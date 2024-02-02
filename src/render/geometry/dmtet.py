@@ -74,6 +74,7 @@ class DMTet:
             torch.linspace(0, 1 - (1 / N), N, dtype=torch.float32, device="cuda"),
             # indexing="ij",    # todo
         )
+        # initial the uv grid
 
         pad = 0.9 / N
 
@@ -90,6 +91,7 @@ class DMTet:
             ],
             dim=-1,
         ).view(-1, 2)
+        # The coordinates
 
         def _idx(tet_idx, N):
             x = tet_idx % N
@@ -102,6 +104,7 @@ class DMTet:
         uv_idx = torch.stack(
             (tet_idx * 4, tet_idx * 4 + tri_idx + 1, tet_idx * 4 + tri_idx + 2), dim=-1
         ).view(-1, 3)
+        # The id of vertex on the triangle <-> vertex coordinate on uv grid
 
         return uvs, uv_idx
 
@@ -141,13 +144,13 @@ class DMTet:
         denominator = edges_to_interp_sdf.sum(1, keepdim=True)
 
         edges_to_interp_sdf = torch.flip(edges_to_interp_sdf, [1]) / denominator
-        verts = (edges_to_interp * edges_to_interp_sdf).sum(1)
+        verts = (edges_to_interp * edges_to_interp_sdf).sum(1) # New verts at sdf==0
 
         idx_map = idx_map.reshape(-1, 6)
 
         v_id = torch.pow(2, torch.arange(4, dtype=torch.long, device="cuda"))
         tetindex = (occ_fx4[valid_tets] * v_id.unsqueeze(0)).sum(-1)
-        num_triangles = self.num_triangles_table[tetindex]
+        num_triangles = self.num_triangles_table[tetindex] #the devided triangles from the cross section, 1 for triangle shape and 2 for quadrilateral
 
         # Generate triangle indices
         faces = torch.cat(
@@ -170,7 +173,7 @@ class DMTet:
         num_tets = tet_fx4.shape[0]
         tet_gidx = torch.arange(num_tets, dtype=torch.long, device=self.device)[
             valid_tets
-        ]
+        ] # The id of valid tets in original mesh
         face_gidx = torch.cat(
             (
                 tet_gidx[num_triangles == 1] * 2,
@@ -186,6 +189,9 @@ class DMTet:
         )
 
         uvs, uv_idx = self.map_uv(faces, face_gidx, num_tets * 2)
+        # All coordinate on uv gird; 3 vertex id for each triangle
+        # So the UV coordinate is only defined but currently useless
+        # The input param "faces" is not used in map_uv
 
         return verts, faces, uvs, uv_idx
 

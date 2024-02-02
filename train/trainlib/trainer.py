@@ -38,7 +38,7 @@ class Trainer:
         self.eval_interval = conf.get_int("eval_interval")
         self.test_interval = self.eval_interval
         self.num_epoch_repeats = conf.get_int("num_epoch_repeats", 1)
-        self.num_epochs = 150
+        self.num_epochs = 100
         self.accu_grad = conf.get_int("accu_grad", 1)
         self.summary_path = os.path.join(args.logs_path, args.name)
         self.writer = SummaryWriter(self.summary_path)
@@ -94,9 +94,15 @@ class Trainer:
         """
         pass
 
-    def extra_save_state(self, global_step):
+    # def extra_save_state(self, global_step):
+    #     """
+    #     Ran at each save step for saving extra state
+    #     """
+    #     pass
+
+    def transfer_mesh_info(self, global_step):
         """
-        Ran at each save step for saving extra state
+        transfer the mesh in stage 1 to stage 2
         """
         pass
 
@@ -165,6 +171,9 @@ class Trainer:
                     # self.writer.add_scalar(
                     # "ior_step", self.optim.param_groups[0]["params"][0].item(), global_step=step_id
                     # )
+                    if self.args.stage == 1:
+                        self.transfer_mesh_info(global_step=step_id)
+
                     if batch % self.print_interval == 0:
                         print(
                             "E",
@@ -179,12 +188,12 @@ class Trainer:
 
                     if batch % self.save_interval == 0 and (epoch > 0 or batch > 0):
                         print("saving")
-                        if self.managed_weight_saving and self.args.stage != 1:
-                            self.net.save_weights(self.args)
-                        elif self.args.stage == 2:
-                            torch.save(
-                                self.net.state_dict(), self.default_net_state_path
-                            )
+                        # if self.managed_weight_saving and self.args.stage != 1:
+                        #     self.net.save_weights(self.args)
+                        # elif self.args.stage == 2:
+                        torch.save(
+                            self.net.state_dict(), self.default_net_state_path
+                        )
                         torch.save(self.optim.state_dict(), self.optim_state_path)
                         if self.lr_scheduler is not None:
                             torch.save(
@@ -192,8 +201,9 @@ class Trainer:
                                 self.lrsched_state_path,
                             )
                         torch.save({"iter": step_id + 1}, self.iter_state_path)
-                        if self.args.stage == 1:
-                            self.extra_save_state(global_step=step_id)
+                        # if self.args.stage == 1:
+                        #     # self.extra_save_state(global_step=step_id)
+                        #     self.transfer_mesh_info(global_step=step_id)
                     ############################
 
                     if (

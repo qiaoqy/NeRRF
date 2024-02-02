@@ -174,6 +174,7 @@ def render_layer(rast, rast_deriv, mesh, view_pos, lgt, resolution, spp, msaa, b
 
     # Interpolate world space position
     gb_pos, _ = interpolate(mesh.v_pos[None, ...], rast_out_s, mesh.t_pos_idx.int())
+    # [1,272,480,3]          [1,19898,3]
 
     # Compute geometric normals. We need those because of bent normals trick (for bump mapping)
     v0 = mesh.v_pos[mesh.t_pos_idx[:, 0], :]
@@ -208,6 +209,7 @@ def render_layer(rast, rast_deriv, mesh, view_pos, lgt, resolution, spp, msaa, b
     ################################################################################
     # Shade
     ################################################################################
+    # GIVE COLOR TO PIXELS
 
     buffers = shade(
         gb_pos,
@@ -242,6 +244,28 @@ def render_layer(rast, rast_deriv, mesh, view_pos, lgt, resolution, spp, msaa, b
 #  - Single mesh
 #  - Single light
 #  - Single material
+
+# 函数的参数说明如下：
+
+# ctx：nvdiffrast RasterizeCudaContext 对象
+# mesh：要渲染的网格对象
+# mtx_in：模型视图投影矩阵（Model-View-Projection Matrix）
+# view_pos：相机位置
+# lgt：光照对象
+# resolution：渲染分辨率
+# spp：每像素采样次数（Samples Per Pixel），默认为1
+# num_layers：深度剥离的层数，默认为1, Then no peeling
+# msaa：是否启用多重采样抗锯齿（Multisample Anti-Aliasing），默认为False
+# background：背景图像，默认为None
+# bsdf：用于渲染的着色模型，默认为None
+
+# 函数的主要步骤如下：
+
+# 准备输入向量和转换numpy数组为torch张量。
+# 进行剪裁空间变换，将顶点位置转换到裁剪空间。
+# 从前向后渲染所有的深度剥离层。
+# 设置背景图像。
+# 将所有层进行合成，得到最终的渲染结果。
 # ==============================================================================================
 def render_mesh(
     ctx,
@@ -289,7 +313,7 @@ def render_mesh(
         background.shape[1] == resolution[0] and background.shape[2] == resolution[1]
     )
 
-    full_res = [resolution[0] * spp, resolution[1] * spp]
+    full_res = [resolution[0] * spp, resolution[1] * spp]   # spp = 1
 
     # Convert numpy arrays to torch tensors
     mtx_in = (
@@ -299,14 +323,14 @@ def render_mesh(
     )
     view_pos = prepare_input_vector(view_pos)
 
-    # clip space transform
+    # clip space transform Normalization
     v_pos_clip = ru.xfm_points(mesh.v_pos[None, ...], mtx_in)
 
     # Render all layers front-to-back
     layers = []
     with dr.DepthPeeler(ctx, v_pos_clip, mesh.t_pos_idx.int(), full_res) as peeler:
         for _ in range(num_layers):
-            rast, db = peeler.rasterize_next_layer()
+            rast, db = peeler.rasterize_next_layer() # initialization with 0; rast == rasterize result; db == depth buffer
             layers += [
                 (
                     render_layer(

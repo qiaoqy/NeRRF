@@ -16,8 +16,10 @@ import numpy as np
 import torch
 from dotmap import DotMap
 from dataset.dataloader import Dataset
+from torchviz import make_dot
+# import itertools
 
-
+# torch.autograd.set_detect_anomaly(True)
 def extra_args(parser):
     parser.add_argument(
         "--batch_size", "-B", type=int, default=16, help="Object batch size ('SB')"
@@ -158,21 +160,28 @@ class RRFTrainer(trainlib.Trainer):
                         ],
                         "lr": 0.001,
                     },
-                ],
-            )
-        elif args.stage == 2:
-            self.optim = torch.optim.Adam(
-                [
                     {
-                        "params": [p for n, p in net.named_parameters()],
+                        "params": [
+                            p 
+                            for n, p in net.named_parameters()
+                        ],
                         "lr": 0.01,  # 0.01 for ngp, 5e-4 for nerf
                     },
-                    # {
-                    #     "params": [trained_ior],
-                    #     "lr": 0.005,
-                    # }
-                ]
+                ],
             )
+        # elif args.stage == 2:
+        #     self.optim = torch.optim.Adam(
+        #         [
+        #             {
+        #                 "params": [p for n, p in net.named_parameters()],
+        #                 "lr": 0.01,  # 0.01 for ngp, 5e-4 for nerf
+        #             },
+        #             # {
+        #             #     "params": [trained_ior],
+        #             #     "lr": 0.005,
+        #             # }
+        #         ]
+        #     )
         else:
             raise NotImplementedError()
 
@@ -189,13 +198,13 @@ class RRFTrainer(trainlib.Trainer):
             )
 
         # load mesh rendered in stage 1
-        if args.stage == 2:
-            if not args.use_sdf:
-                renderer.init_tet(
-                    mesh_path="data/learned_geo/" + args.name.split("_")[0] + ".obj"
-                )
-        elif args.stage != 1:
-            raise NotImplementedError()
+        # if args.stage == 2:
+        if not args.use_sdf:
+            renderer.init_tet(
+                mesh_path="data/learned_geo/" + args.name.split("_")[0] + ".obj"
+            )
+        # elif args.stage != 1:
+        #     raise NotImplementedError()
 
         self.z_near = train_dset.z_near
         self.z_far = train_dset.z_far
@@ -205,20 +214,27 @@ class RRFTrainer(trainlib.Trainer):
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size)
 
-    def extra_save_state(self, global_step):
-        torch.save(renderer.state_dict(), self.renderer_state_path)
-        mesh = renderer.export_mesh(global_step=global_step)
-        geo_path = "data/learned_geo/"
-        if not os.path.exists(geo_path):
-            os.makedirs(geo_path)
-        mesh.export(geo_path + args.name + str(global_step) + ".obj")
+    # def extra_save_state(self, global_step):
+    #     # torch.save(renderer.state_dict(), self.renderer_state_path)
+    #     mesh = renderer.export_mesh(global_step=global_step)
+        
+    #     # geo_path = "data/learned_geo/"
+    #     # if not os.path.exists(geo_path):
+    #     #     os.makedirs(geo_path)
+    #     # mesh.export(geo_path + args.name + str(global_step) + ".obj")
+
+
+    def transfer_mesh_info(self, global_step):
+        [verts , faces] = renderer.export_vf(global_step=global_step)
+        renderer.init_tet_iteration( verts, faces )
+
 
     def calc_losses(self, data, is_train=True, global_step=0):
         stage = args.stage
         image = data["images"][0].to(device=device)  # (3, H, W)
         pose = data["poses"][0].to(device=device)  # (4, 4)
         focal = data["focal"][0].to(device=device)  # (2)
-        mvp = data["mvp"][0].to(device=device)  # (4, 4)
+        mvp = data["mvp"][0].to(device=device)  # (4, 4) Model-View-Projection The projection transformation matrix
         mask = data["mask"][0].to(device=device).float()  # (H, W)
         _, H, W = image.shape  # (3, H, W)
 
@@ -252,6 +268,8 @@ class RRFTrainer(trainlib.Trainer):
         #     pix_inds = pix_inds_unique
         #     # print("警告：已删除重复的采样点。")
 
+        masked_image = image * mask[0, 1:271, :]
+
         samp_rgbs_gt = rgbs_gt[pix_inds].unsqueeze(0)  # (1, ray_batch_size, 3)
         samp_rays = (
             cam_rays.view(-1, cam_rays.shape[-1])[pix_inds]
@@ -263,25 +281,22 @@ class RRFTrainer(trainlib.Trainer):
         if stage == 1:
             mask_loss = 0.0
             ek_loss = 0.0
-            mask_, ek_loss = renderer.render_mask(
+            image_, mask_, ek_loss = renderer.render_mask(
                 samp_rays, mvp, h=H, w=W, global_step=global_step
             )
+            image_ = image_.permute(2, 0, 1)
             mask_loss = torch.nn.functional.mse_loss(mask, mask_)
-
+            masked_image_loss = torch.nn.functional.mse_loss(masked_image, image_)
             loss_dict["mask"] = mask_loss.item()
             loss_dict["eikonal"] = ek_loss
-            loss = mask_loss + ek_loss
-            if is_train:
-                loss.backward()
-            loss_dict["t"] = loss.item()
-            return loss_dict
-        elif stage == 2:
+            loss_dict["masked_image"] = masked_image_loss
+            # loss_stage1 = mask_loss + ek_loss
             render_dict = DotMap(render_par(samp_rays, want_weights=True))
             coarse = render_dict.coarse
             fine = render_dict.fine
             using_fine = len(fine) > 0
             using_fine = True
-            rgb_loss = self.rgb_coarse_crit(coarse.rgb, samp_rgbs_gt) #this step itself has problem.
+            rgb_loss = self.rgb_coarse_crit(coarse.rgb, samp_rgbs_gt) 
             loss_dict["rc"] = rgb_loss.item() * self.lambda_coarse
             if using_fine:
                 if apply_mask:
@@ -289,7 +304,22 @@ class RRFTrainer(trainlib.Trainer):
                 fine_loss = self.rgb_fine_crit(fine.rgb, samp_rgbs_gt)
                 rgb_loss = rgb_loss * self.lambda_coarse + fine_loss * self.lambda_fine
                 loss_dict["rf"] = fine_loss.item() * self.lambda_fine
-            loss = rgb_loss
+            # loss_stage2 = rgb_loss
+            # loss = mask_loss + ek_loss + rgb_loss
+            loss = mask_loss + ek_loss + 0.005 * masked_image_loss
+            # # yhat = torch.cat(mask_, fine.rgb)
+            # # combined_parameters = itertools.chain(net.named_parameters(), renderer.named_parameters())
+            # # make_dot(fine.rgb, params=dict(renderer.named_parameters()), show_attrs=True, show_saved=True).render(" ", format="png")
+            # # 创建图形属性字典，设置分辨率为300
+            # graph_attr = {'dpi': '300'}
+
+            # # 生成图形并设置图形属性
+            # # graph = make_dot(fine.rgb, params=dict(renderer.named_parameters()), show_attrs=True, show_saved=True)
+            # graph = make_dot(mask_, params=dict(net.named_parameters()), show_attrs=True, show_saved=True)
+            # graph.graph_attr.update(graph_attr)
+
+            # # 保存图形
+            # graph.render("nerrf_torchviz", format="png")
 
             if is_train:
                 loss.backward()
