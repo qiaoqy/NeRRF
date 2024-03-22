@@ -5,15 +5,59 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Train-Stage1",
+            "name": "Train_catduck",
             "type": "python",
             "request": "launch",
             "program": "train/train.py",
             "console": "integratedTerminal",
             "justMyCode": false, 
             "args": [
-                "-B", "16",
-                "-n", "horse_transparent",
+                "-B", "1",
+                "-n", "catduck_transparent",
+                "-c", "NeRRF.conf",
+                "-D", "data/blender/transparent/catduck",
+                "--gamma", "0.95",
+                "--gpu_id=0", 
+                "--visual_path", "tet_visual",
+                "--stage", "1",
+                "--tet_scale", "4.2",
+                "--sphere_radius", "2.30",
+                "--enable_refr"
+            ],
+            "python":"/opt/conda/envs/nerrf/bin/python"
+        },
+        {
+            "name": "Train_cow",
+            "type": "python",
+            "request": "launch",
+            "program": "train/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false, 
+            "args": [
+                "-B", "1",
+                "-n", "cow_transparent",
+                "-c", "NeRRF.conf",
+                "-D", "data/blender/transparent/cow",
+                "--gamma", "0.95",
+                "--gpu_id=0", 
+                "--visual_path", "tet_visual",
+                "--stage", "1",
+                "--tet_scale", "4.2",
+                "--sphere_radius", "2.30",
+                "--enable_refr"
+            ],
+            "python":"/opt/conda/envs/nerrf/bin/python"
+        },
+        {
+            "name": "Train_horse",
+            "type": "python",
+            "request": "launch",
+            "program": "train/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false, 
+            "args": [
+                "-B", "1",
+                "-n", "hose_transparent",
                 "-c", "NeRRF.conf",
                 "-D", "data/blender/transparent/horse",
                 "--gamma", "0.95",
@@ -23,7 +67,30 @@
                 "--tet_scale", "3.8",
                 "--sphere_radius", "2.40",
                 "--enable_refr"
-            ]
+            ],
+            "python":"/opt/conda/envs/nerrf/bin/python"
+        },
+        {
+            "name": "Train_bunny",
+            "type": "python",
+            "request": "launch",
+            "program": "train/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false, 
+            "args": [
+                "-B", "1",
+                "-n", "bunny_transparent",
+                "-c", "NeRRF.conf",
+                "-D", "data/blender/transparent/bunny",
+                "--gamma", "0.95",
+                "--gpu_id=0", 
+                "--visual_path", "tet_visual",
+                "--stage", "1",
+                "--tet_scale", "3.8",
+                "--sphere_radius", "2.43",
+                "--enable_refr"
+            ],
+            "python":"/opt/conda/envs/nerrf/bin/python"
         },
         {
             "name": "Train-Stage2",
@@ -44,7 +111,8 @@
                 "--tet_scale", "4.2",
                 "--sphere_radius", "2.30",
                 "--enable_refr"
-            ]
+            ],
+            "python":"/opt/conda/envs/nerrf/bin/python"
         }
     ]
 }
