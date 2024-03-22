@@ -14,7 +14,7 @@ import dataset.utils as api_utils
 import torch
 from torchvision import transforms
 from PIL import Image
-
+from scipy import ndimage
 
 def get_image_to_tensor_balanced(image_size):
     ops = []
@@ -94,8 +94,9 @@ class Dataset(torch.utils.data.Dataset):
             self.z_near, self.z_far = 0.02, 80
             self.image_dir = data_dir
             self.depth_dir = data_dir + "/../../depth/" + os.path.basename(data_dir)
+            self.mask_dir = data_dir + "/../../mask/" + os.path.basename(data_dir)
             self.meta_dir = data_dir + "/../../meta"
-            self.mask_dir = data_dir + "/mask"
+            # self.mask_dir = data_dir + "/mask"
             if self.split == "train":
                 self.image_list = [str(2 * d) for d in range(50)] #50
             else:
@@ -154,11 +155,18 @@ class Dataset(torch.utils.data.Dataset):
             img_name = name + "_0001.png"
             meta_name = name + "_meta_0000.json"
 
-            depth_name = name + "_depth_0001.exr"
-            depth_path = join(self.depth_dir, depth_name)
-            depth = api_utils.exr_loader(depth_path, ndim=1)
-            dd = cv2.resize(depth, dsize=(480, 272))
-            mask3 = dd < 100
+            mask_name = "mask_" + name + "_0001.png.png"
+            mask_path = join(self.mask_dir, mask_name)
+            mask = imageio.imread(mask_path)
+            resized_mask = np.where(mask == 255, 1, mask)
+            # resized_mask = np.resize(resized_mask, (272, 480))
+            resized_mask = ndimage.zoom(resized_mask, (272 / resized_mask.shape[0], 480 / resized_mask.shape[1]))
+
+            # depth_name = name + "_depth_0001.exr"
+            # depth_path = join(self.depth_dir, depth_name)
+            # depth = api_utils.exr_loader(depth_path, ndim=1)
+            # dd = cv2.resize(depth, dsize=(480, 272))
+            # mask3 = dd < 100
 
             # image_path = join(self.image_dir, img_name)
             # seg_mask = segment_mask(image_path, "sam_cp/sam_vit_h_4b8939.pth")
@@ -168,7 +176,7 @@ class Dataset(torch.utils.data.Dataset):
             # # Save the mask image
             # cv2.imwrite(mask_path, mask3*255)
             
-            mask = torch.tensor(mask3).unsqueeze(0)
+            mask = torch.tensor(resized_mask).unsqueeze(0)
         elif self.type == "eikonal":
             img_name = name + ".JPG"
             meta_name = name + ".json"
