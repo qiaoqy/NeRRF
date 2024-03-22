@@ -180,9 +180,7 @@ with torch.no_grad():
         _, H, W = image.shape  # (3, H, W)
         cam_rays = util.gen_rays(pose, W, H, focal, z_near, z_far)  # (H, W, 8)
 
-        rgbs, depth = render_par(
-            cam_rays.view(-1, cam_rays.shape[-1]).unsqueeze(0), want_weights=True
-        )  #rendering operation
+        rgbs, depth = render_par(cam_rays.view(-1, cam_rays.shape[-1]).unsqueeze(0), want_weights=True)  #rendering operation
         rgbs = rgbs.permute(0, 2, 1).view(-1, 3, H, W).contiguous().cpu()
 
         rgb_file_name = f"rgbscow_{1}.png"
