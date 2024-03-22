@@ -16,7 +16,7 @@ class Trainer:
         self.train_data_loader = torch.utils.data.DataLoader(
             train_dataset,
             # batch_size=args.batch_size,
-            batch_size=64, #1
+            batch_size=32, #1
             shuffle=True,
             # num_workers=1,    # lead to very slow training
             pin_memory=False,
@@ -24,7 +24,7 @@ class Trainer:
         self.test_data_loader = torch.utils.data.DataLoader(
             test_dataset,
             # batch_size=min(args.batch_size, 16),
-            batch_size=64,   #1
+            batch_size=32,   #1
             shuffle=True,
             # num_workers=1,    # lead to very slow training
             pin_memory=False,
@@ -38,7 +38,7 @@ class Trainer:
         self.eval_interval = conf.get_int("eval_interval")
         self.test_interval = self.eval_interval
         self.num_epoch_repeats = conf.get_int("num_epoch_repeats", 1)
-        self.num_epochs = 100
+        self.num_epochs = 50
         self.accu_grad = conf.get_int("accu_grad", 1)
         self.summary_path = os.path.join(args.logs_path, args.name)
         self.writer = SummaryWriter(self.summary_path)
