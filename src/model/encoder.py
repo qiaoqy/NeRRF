@@ -134,7 +134,7 @@ class SpatialEncoder(nn.Module):
             self.depth_encoder = nn.Sequential(nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3,
                         bias=False),
                         nn.BatchNorm2d(64),
-                        nn.ReLU(inplace=True))
+                        nn.ReLU(inplace=False)) #True
             self.latent_fusion = nn.Conv2d(self.latent_size+64, self.latent_size, kernel_size=1,stride=1,bias=False)
             
 
