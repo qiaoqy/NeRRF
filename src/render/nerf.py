@@ -213,6 +213,7 @@ class NeRFRenderer(torch.nn.Module):
                 batch_size = 10240
                 print(f"[INFO] start SDF pre-training ")
                 for i in tqdm.tqdm(range(pretrain_iters)):
+                    # print(f"Step {i}: {mesh.faces}")
                     rand_idx = torch.randint(0, self.verts.shape[0], (batch_size,))
                     p = self.verts[rand_idx]
                     ref_value = sdf[rand_idx]
@@ -235,20 +236,12 @@ class NeRFRenderer(torch.nn.Module):
         self.edges = torch.unique(edges, dim=0)
 
         def initial_guess_material(geometry):
-            kd_min, kd_max = torch.tensor(
-                [0.0, 0.0, 0.0, 1.0], dtype=torch.float32, device="cuda"
-            ), torch.tensor([1.0, 1.0, 1.0, 1.0], dtype=torch.float32, device="cuda")
-            ks_min, ks_max = torch.tensor(
-                [0.0, 0.0, 0.0], dtype=torch.float32, device="cuda"
-            ), torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32, device="cuda")
-            nrm_min, nrm_max = torch.tensor(
-                [-1.0, -1.0, -1.0], dtype=torch.float32, device="cuda"
-            ), torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32, device="cuda")
+            kd_min, kd_max = torch.tensor([0.0, 0.0, 0.0, 1.0], dtype=torch.float32, device="cuda"), torch.tensor([1.0, 1.0, 1.0, 1.0], dtype=torch.float32, device="cuda")
+            ks_min, ks_max = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32, device="cuda"), torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32, device="cuda")
+            nrm_min, nrm_max = torch.tensor([-1.0, -1.0, -1.0], dtype=torch.float32, device="cuda"), torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32, device="cuda")
             mlp_min = torch.cat((kd_min[0:3], ks_min, nrm_min), dim=0)
             mlp_max = torch.cat((kd_max[0:3], ks_max, nrm_max), dim=0)
-            mlp_map_opt = mlptexture.MLPTexture3D(
-                geometry.getAABB(), channels=9, min_max=[mlp_min, mlp_max]
-            )
+            mlp_map_opt = mlptexture.MLPTexture3D(geometry.getAABB(), channels=9, min_max=[mlp_min, mlp_max])
             mat = material.Material({"kd_ks_normal": mlp_map_opt}) #kd_ks_normal 是一个包含漫反射系数 kd、镜面反射系数 ks 和表面法线 normal 分布信息的材质属性
             mat["bsdf"] = "pbr"
             return mat
@@ -500,7 +493,7 @@ class NeRFRenderer(torch.nn.Module):
             [h, w],
             1,
             msaa=True, # Multisample Anti-Aliasing
-            bsdf="diffuse", #normal
+            bsdf="normal", #normal
         )
 
         def shade_normal():
@@ -508,20 +501,12 @@ class NeRFRenderer(torch.nn.Module):
             rgb = (mask[..., :3].detach().cpu().numpy() * 255).astype(np.uint8)
             image = Image.fromarray(rgb, mode="RGB")
             image.save("test_normal.png")
+
         # "shaded" is the rbg alpha color of the image
         shade_normal()
-        tenso = buffers['shaded']
-        # 将张量转换为 NumPy 数组，并将值缩放到 0-255 范围内
-        numpy_array = (tenso[0, :, :, :3] * 255).detach().cpu().numpy().astype(np.uint8)
-
-        # 创建 PIL 图像对象
-        image = Image.fromarray(numpy_array)
-
-        # 保存图像
-        image.save("output.png")
-        rgb_img = buffers["shaded"][0, 1:271, ..., :3]
+        shade_img = buffers["shaded"][0, 1:271, ..., :3]
         mask = buffers["shaded"][..., 3:]
-        return (rgb_img, mask[..., 0], ek_loss)
+        return (shade_img, mask[..., 0], ek_loss)
 
     def intersection_with_mesh(self, rays, mesh, far=False):
         vertices = mesh.vertices
@@ -1277,7 +1262,8 @@ class NeRFRenderer(torch.nn.Module):
                     refr_dir_ = n_ * in_dir_ + (n_ * cos_i - cos_o).unsqueeze(-1) * normals                     
                 else: # from glass to air           
                     tmp = 1 - (n**2) * (1 - cos_i**2)
-                    tmp[tmp < 0] = 0.0
+                    tmp = tmp.clone()
+                    tmp[tmp < 0] = 0.000001
                     cos_o = torch.sqrt(tmp)
                     if self.stage == 3:
                         model_input = torch.cat([in_dir_, hit_pts_, normals_], dim=-1)
