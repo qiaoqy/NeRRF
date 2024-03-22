@@ -8,8 +8,7 @@ import numpy as np
 import torch
 from torch.autograd import Function
 from torch.cuda.amp import custom_bwd, custom_fwd
-from IPython import embed
-
+from IPython import embed # why add this for our code?
 try:
     import tinycudann as tcnn
 except ImportError as e:
@@ -73,7 +72,7 @@ class NGPRadianceField(torch.nn.Module):
     def __init__(
         self,
         aabb: Union[torch.Tensor, List[float]] = torch.tensor(
-            [-3, -3, -3, 3, 3, 3], device="cuda:0"
+            [-6, -6, -6, 6, 6, 6], device="cuda:0" #3
         ),
         num_dim: int = 3,
         use_viewdirs: bool = True,

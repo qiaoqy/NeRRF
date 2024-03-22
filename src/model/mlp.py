@@ -162,5 +162,5 @@ class MLP(nn.Module):
         for l in range(self.num_layers):
             x = self.net[l](x)
             if l != self.num_layers - 1:
-                x = F.relu(x, inplace=True)
+                x = F.relu(x, inplace=False) #True
         return x
