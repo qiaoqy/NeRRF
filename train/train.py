@@ -17,16 +17,14 @@ import torch
 from dotmap import DotMap
 from dataset.dataloader import Dataset
 import cv2
-import random
 
-np.random.seed(0)
-random.seed(0)
-torch.manual_seed(0)
-torch.backends.cudnn.benchmark = False
-# from torchviz import make_dot
-# import itertools
-torch.backends.cuda.max_split_size_mb = 512
-# torch.autograd.set_detect_anomaly(True)
+# import random
+# np.random.seed(0)
+# random.seed(0)
+# torch.manual_seed(0)
+# torch.backends.cudnn.benchmark = False
+# torch.backends.cuda.max_split_size_mb = 512
+
 def extra_args(parser):
     parser.add_argument(
         "--batch_size", "-B", type=int, default=16, help="Object batch size ('SB')"
@@ -325,7 +323,7 @@ class RRFTrainer(trainlib.Trainer):
                 loss_dict["rf"] = fine_loss.item() * self.lambda_fine
             # loss_stage2 = rgb_loss
             # loss = mask_loss + ek_loss + 0.02 * rgb_loss
-            loss = mask_loss + 0.01 * ek_loss
+            loss = mask_loss + 0.03 * ek_loss
             loss_dict["sum"] = loss
             # loss = mask_loss + ek_loss + 0.005 * masked_image_loss
             # yhat = torch.cat(mask_, fine.rgb)
