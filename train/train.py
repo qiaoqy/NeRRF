@@ -174,19 +174,7 @@ class RRFTrainer(trainlib.Trainer):
                     },
                 ],
             )
-        # elif args.stage == 2:
-        #     self.optim = torch.optim.Adam(
-        #         [
-        #             {
-        #                 "params": [p for n, p in net.named_parameters()],
-        #                 "lr": 0.01,  # 0.01 for ngp, 5e-4 for nerf
-        #             },
-        #             # {
-        #             #     "params": [trained_ior],
-        #             #     "lr": 0.005,
-        #             # }
-        #         ]
-        #     )
+
         else:
             raise NotImplementedError()
 
@@ -195,10 +183,7 @@ class RRFTrainer(trainlib.Trainer):
             # self.lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=self.optim, T_max=100, eta_min=0)
         else:
             self.lr_scheduler = None
-        # self.lr_schedulers = {
-        # "renderer": torch.optim.lr_scheduler.ExponentialLR(optimizer=self.optim, gamma=0.85),
-        # "net": torch.optim.lr_scheduler.ExponentialLR(optimizer=self.optim, gamma=0.95),
-        # }
+
 
         # load renderer paramters
         if os.path.exists(self.renderer_state_path):
@@ -207,16 +192,11 @@ class RRFTrainer(trainlib.Trainer):
             )
 
         # load mesh rendered in stage 1
-        # if args.stage == 2:
+
         if not args.use_sdf:
-            # renderer.init_tet(
-            #     mesh_path="data/learned_geo/" + args.name.split("_")[0] + ".obj"
-            # )
             renderer.init_tet(
                 mesh_path="data/init/sphere.obj"
             )
-        # elif args.stage != 1:
-        #     raise NotImplementedError()
 
         self.z_near = train_dset.z_near
         self.z_far = train_dset.z_far
@@ -225,16 +205,6 @@ class RRFTrainer(trainlib.Trainer):
 
     def post_batch(self, epoch, batch):
         renderer.sched_step(args.batch_size) 
-
-    # def extra_save_state(self, global_step):
-    #     # torch.save(renderer.state_dict(), self.renderer_state_path)
-    #     mesh = renderer.export_mesh(global_step=global_step)
-        
-    #     # geo_path = "data/learned_geo/"
-    #     # if not os.path.exists(geo_path):
-    #     #     os.makedirs(geo_path)
-    #     # mesh.export(geo_path + args.name + str(global_step) + ".obj")
-
 
     def transfer_mesh_info(self, global_step):
         [verts , faces] = renderer.export_vf(global_step=global_step)
@@ -281,13 +251,6 @@ class RRFTrainer(trainlib.Trainer):
         # pix_inds_unmasked = torch.randint(0, H * W, (args.ray_batch_size // 2,),device=device)
         pix_inds_unmasked = torch.randint(2, H * W - 2, (args.ray_batch_size // 2,), device=device)
         pix_inds = torch.cat((pix_inds_masked, pix_inds_unmasked))
-        # # 删除重复元素
-        # pix_inds_unique = torch.unique(pix_inds)
-        # if pix_inds_unique.size(0) < pix_inds.size(0):
-        #     pix_inds = pix_inds_unique
-        #     # print("警告：已删除重复的采样点。")
-
-        # masked_image = image * mask[0, 1:271, :]
 
         samp_rgbs_gt = rgbs_gt[pix_inds].unsqueeze(0)  # (1, ray_batch_size, 3)
         samp_rays = (cam_rays.view(-1, cam_rays.shape[-1])[pix_inds].to(device=device).unsqueeze(0))  # (1, ray_batch_size, 8)
@@ -325,20 +288,6 @@ class RRFTrainer(trainlib.Trainer):
             # loss = mask_loss + ek_loss + 0.02 * rgb_loss
             loss = mask_loss + 0.03 * ek_loss
             loss_dict["sum"] = loss
-            # loss = mask_loss + ek_loss + 0.005 * masked_image_loss
-            # yhat = torch.cat(mask_, fine.rgb)
-            # combined_parameters = itertools.chain(net.named_parameters(), renderer.named_parameters())
-            # make_dot(fine.rgb, params=dict(renderer.named_parameters()), show_attrs=True, show_saved=True).render(" ", format="png")
-            # # 创建图形属性字典，设置分辨率为300
-            # graph_attr = {'dpi': '300'}
-
-            # # 生成图形并设置图形属性
-            # graph = make_dot(fine.rgb, params=dict(renderer.named_parameters()), show_attrs=True, show_saved=True)
-            # # graph = make_dot(mask_, params=dict(net.named_parameters()), show_attrs=True, show_saved=True)
-            # graph.graph_attr.update(graph_attr)
-
-            # # 保存图形
-            # graph.render("nerrf_torchviz", format="png")
 
             if is_train:
                 # with torch.autograd.detect_anomaly():
