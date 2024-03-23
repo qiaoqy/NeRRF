@@ -4,6 +4,7 @@
 checkpoints/
 data/
 logs/
+monitor/
 __pycache__
 scripts/colmap2nerf.py
 dynamicgs/

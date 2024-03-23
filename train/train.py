@@ -18,12 +18,12 @@ from dotmap import DotMap
 from dataset.dataloader import Dataset
 import cv2
 
-# import random
-# np.random.seed(0)
-# random.seed(0)
-# torch.manual_seed(0)
-# torch.backends.cudnn.benchmark = False
-# torch.backends.cuda.max_split_size_mb = 512
+import random
+np.random.seed(0)
+random.seed(0)
+torch.manual_seed(0)
+torch.backends.cudnn.benchmark = False
+torch.backends.cuda.max_split_size_mb = 512
 
 def extra_args(parser):
     parser.add_argument(
@@ -234,14 +234,6 @@ class RRFTrainer(trainlib.Trainer):
                 cv2.imwrite(rgb_file_name, fixed_rgbs * 255)
 
         apply_mask = False  #False
-        # if apply_mask:
-        #     mask_flatten = mask[:, :H, :].reshape(-1)
-        #     hit_idx = torch.where(mask_flatten > 0.5)[0]
-        #     perm = torch.randperm(hit_idx.numel())
-        #     selected_indices = perm[: args.ray_batch_size]
-        #     pix_inds = hit_idx[selected_indices]
-        # else:
-        #     pix_inds = torch.randint(0, H * W, (args.ray_batch_size,))
 
         mask_flatten = mask[:, :H, :].reshape(-1)
         hit_idx = torch.where(mask_flatten < 0.5)[0]
@@ -286,7 +278,7 @@ class RRFTrainer(trainlib.Trainer):
                 loss_dict["rf"] = fine_loss.item() * self.lambda_fine
             # loss_stage2 = rgb_loss
             # loss = mask_loss + ek_loss + 0.02 * rgb_loss
-            loss = mask_loss + 0.03 * ek_loss
+            loss = mask_loss + 0.1 * ek_loss
             loss_dict["sum"] = loss
 
             if is_train:
