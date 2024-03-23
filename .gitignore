@@ -1,6 +1,13 @@
 *.png
 *.pth
+*.pyc
 checkpoints/
 data/
 logs/
 __pycache__
+scripts/colmap2nerf.py
+dynamicgs/
+nerrf_torchviz
+nvdiffrast
+python-mesh-raycast
+tiny-cuda-nn
